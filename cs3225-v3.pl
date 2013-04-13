@@ -3,10 +3,12 @@ use strict;
 use Getopt::Long;
 
 #----------------globals------------------------------------------------------------------
-our ($SV,$FASTA,$COVERAGE);
-GetOptions('sv=s'=>\$SV,'sequence=s'=>\$FASTA,'coverage=s'=>\$COVERAGE);
-
-
+our ( $SV, $FASTA, $COVERAGE );
+GetOptions(
+	'sv=s'       => \$SV,
+	'sequence=s' => \$FASTA,
+	'coverage=s' => \$COVERAGE
+);
 
 #@chr is 1-indexing,$chr[index] ="0NNNNNNNN..."  N=A/T/C/G
 my @chr;
@@ -36,7 +38,7 @@ my @coverage;
 # $coverage[chr#]->{pos}=coverage
 
 #--------------------main------------------------------------------------------------------------------------------------------------------------------------------
-
+$| = 1;
 read_fasta();
 
 read_sv();
@@ -55,12 +57,11 @@ foreach ( 1 .. $chr_num ) {
 #print join "\n", @sorted;
 #print "\n\n\n";
 
-print "Reading coverage file...";
+print "Reading coverage file";
 foreach ( 1 .. $chr_num ) {
 	read_coverage($_);
 }
-print "done\n";
-
+print "\nDone\n";
 
 locate_breakpoint();
 
@@ -75,21 +76,23 @@ foreach ( 0 .. $#sv ) {
 foreach ( 1 .. $chr_num ) {
 	@chr_link = ();
 
-	print "Lingking breakpoints for chromosome $_...";
+	print "Linking breakpoints for chromosome $_...";
 	make_link($_);
-	print "done\n";
+	print "Done\n";
 
 	print "Generating output for chomosome $_...";
 	print_chr($_);
-	print "done\n";
+	print "Done\n";
 }
 
 #----------------Read the files-----------------------------------------------------------
 sub read_fasta {
-        print "Reading FASTA file...";
+	print "Reading FASTA file";
 	open( CHR, "$FASTA" )
 	  or die("cannot found the fasta file!");
+	my $count = 0;
 	while (<CHR>) {
+		$count++;
 		my $line = trim_line($_);
 		if ( $line =~ />/ ) {
 
@@ -99,13 +102,14 @@ sub read_fasta {
 			next;
 		}
 		$chr[$chr_num] = $chr[$chr_num] . $line;
+		print "." if ( $count % 5000 == 0 );
 	}
 	close(CHR);
-	print "done\n";
+	print "\nDone\n";
 }
 
 sub read_sv {
-        print "Reading SV file...";
+	print "Reading SV file...";
 	open( SV, "$SV" ) or die("cannot find the sv file!");
 	while (<SV>) {
 		chomp;
@@ -126,7 +130,7 @@ sub read_sv {
 		}
 	}
 	close(SV);
-	print "done\n";
+	print "\nDone\n";
 }
 
 sub read_coverage {
@@ -139,7 +143,7 @@ sub read_coverage {
 	my $start;
 	my $end;
 	my $intensity;
-
+	my $count=0;
 	while (<COV>) {
 		$line = $_;
 		( $chr, $temp, $temp, $start, $end, $intensity ) =
@@ -149,6 +153,8 @@ sub read_coverage {
 				$coverage[$chr_index]->{$_} = $intensity;
 			}
 		}
+		$count++;
+		print "." if($count%100000==0);
 	}
 	close(COV);
 }
@@ -157,23 +163,25 @@ sub read_coverage {
 sub print_chr {
 	my $chr_index = shift @_;
 	open( OUT, ">>out.fasta" );
-	if($chr_index!=1){
+	if ( $chr_index != 1 ) {
 		print OUT "\n>chr$chr_index\n";
-	}else{
-		print OUT ">chr$chr_index\n";	
+	}
+	else {
+		print OUT ">chr$chr_index\n";
 	}
 	my $direction = 1;
 	my $cur       = 1;
 	while ( $cur != length( $chr[$chr_index] ) ) {
-		if($direction == 1){
+		if ( $direction == 1 ) {
 			print OUT substr( $chr[$chr_index], $cur, 1 );
-		}else{
+		}
+		else {
 			##print the reverse complement
 			my $base = substr( $chr[$chr_index], $cur, 1 );
-			print OUT "T" if($base eq "A" or $base eq "a");
-			print OUT "A" if($base eq "T" or $base eq "t");
-			print OUT "G" if($base eq "C" or $base eq "c");
-			print OUT "C" if($base eq "G" or $base eq "g");
+			print OUT "T" if ( $base eq "A" or $base eq "a" );
+			print OUT "A" if ( $base eq "T" or $base eq "t" );
+			print OUT "G" if ( $base eq "C" or $base eq "c" );
+			print OUT "C" if ( $base eq "G" or $base eq "g" );
 		}
 		if ( $chr_link[$cur]->{'next'} && $chr_link[$cur]->{'next'} != -1 ) {
 			$direction = -$direction
@@ -234,7 +242,7 @@ sub locate_breakpoint {
   #the real break point is within a window of (b-500, b+500)
   #if |b1-b2|<1000, the two region overlap, they have almost the same breakpoint
   #locate the brak point b in this 1000 bases, and b1=b, b2=b+1
-        print "Locating exact breakpoints...";
+	print "Locating exact breakpoints...";
 	my $chr_index = 0;
 	foreach my $bp (@sorted) {
 
@@ -260,22 +268,32 @@ sub locate_breakpoint {
 		}
 
 	}
+
 	#make sure no overlap
 	$chr_index = 0;
-	foreach my $i (0..$#sorted) {
+	foreach my $i ( 0 .. $#sorted ) {
 		if ( $sorted[$i] == -1 ) {
 			$chr_index++;
 			next;
 		}
-		next if ($sorted[$i-1]==-1);
-		my $tmp_index = $inverse_sv[$chr_index]{$sorted[$i]};
-		my $tmp_index_pre = $inverse_sv[$chr_index]{$sorted[$i-1]};
-		
-		if($sv[$tmp_index]->{'first_bp'}==$sv[$tmp_index_pre]->{'first_bp'} || $sv[$tmp_index]->{'second_bp'}==$sv[$tmp_index_pre]->{'first_bp'}){
-			$sv[$tmp_index_pre]->{'first_bp'} --;
-		}elsif($sv[$tmp_index]->{'first_bp'}==$sv[$tmp_index_pre]->{'second_bp'} || $sv[$tmp_index]->{'second_bp'}==$sv[$tmp_index_pre]->{'second_bp'}){
-			$sv[$tmp_index_pre]->{'second_bp'} --;
+		next if ( $sorted[ $i - 1 ] == -1 );
+		my $tmp_index     = $inverse_sv[$chr_index]{ $sorted[$i] };
+		my $tmp_index_pre = $inverse_sv[$chr_index]{ $sorted[ $i - 1 ] };
+
+		if ( $sv[$tmp_index]->{'first_bp'} == $sv[$tmp_index_pre]->{'first_bp'}
+			|| $sv[$tmp_index]->{'second_bp'} ==
+			$sv[$tmp_index_pre]->{'first_bp'} )
+		{
+			$sv[$tmp_index_pre]->{'first_bp'}--;
+		}
+		elsif (
+			$sv[$tmp_index]->{'first_bp'} == $sv[$tmp_index_pre]->{'second_bp'}
+			|| $sv[$tmp_index]->{'second_bp'} ==
+			$sv[$tmp_index_pre]->{'second_bp'} )
+		{
+			$sv[$tmp_index_pre]->{'second_bp'}--;
 		}
 	}
 	print "done\n";
 }
+
