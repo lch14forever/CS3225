@@ -1,0 +1,7 @@
+#To run the program
+
+perl cs3225-v3.pl --sv <SV file> --sequence <FASTA file> --coverage <COVERAGE file> > <LOG file>
+
+#example
+
+perl cs3225-v3.pl --sv SV.txt --sequence bp.K96243.sanger.fasta --coverage IBP012.sanger.dist.gff
